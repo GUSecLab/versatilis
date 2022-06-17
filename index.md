@@ -54,6 +54,10 @@ and be competitive with existing methods of communication.
 * [Micah Sherr](https://micahsherr.com), Professor, Department of
 Computer Science, Georgetown University.
 
+### Code
+
+This project is under development.  See our progress at https://github.com/GUSecLab/versatilis.
+
 ### Papers
 
 Tan, Henry, and Micah Sherr. "Censorship Resistance as a Side-Effect."
