@@ -56,7 +56,7 @@ Computer Science, Georgetown University.
 
 ### Code
 
-This project is under development.  See our progress at https://github.com/GUSecLab/versatilis.
+This project is under development.  See our progress at [https://github.com/GUSecLab/versatilis](https://github.com/GUSecLab/versatilis).
 
 ### Papers
 
