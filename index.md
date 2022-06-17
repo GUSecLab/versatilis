@@ -22,7 +22,7 @@ Although CRSes have become more advanced, Internet censorship remains
 widespread with information access controls in place in at least 60
 countries[^5].
 
-This project aims to develop algorithms, communication protocols, and
+The Versātilis Project aims to develop algorithms, communication protocols, and
 implementations that achieve censorship resistance as a "side-effect"
 of providing other desirable Internet communication features.  This
 project takes a radically different approach than prior work towards
@@ -46,7 +46,7 @@ adversary of barring access to protocols built using the platform is
 low.  However, if the platform is also regularly used for business and
 commerce, blocking an otherwise useful tool that has widespread
 adoption may be too politically and economically costly for a censor.
-To this end, the platform must both encourage general purpose usage
+To this end, the Versātilis platform must both encourage general purpose usage
 and be competitive with existing methods of communication.
 
 
