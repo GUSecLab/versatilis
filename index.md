@@ -72,21 +72,12 @@ funding agency.
 
 ---
 
-[^1]: See Freedom House. 2021. Freedom of
-Expression. https://freedomhouse.org.
+[^1]: See Freedom House. 2021. Freedom of Expression. https://freedomhouse.org.
 
-[^2]: Arian Akhavan Niaki, Shinyoung Cho, Zachary Weinberg, Nguyen
-Phong Hoang, Abbas Razaghpanah, Nicolas Christin, and Phillipa
-Gill. 2020. ICLab: A Global, Longitudinal Internet Censorship
-Measurement Platform. In IEEE Symposium on Security and Privacy (SP).
+[^2]: Arian Akhavan Niaki, Shinyoung Cho, Zachary Weinberg, Nguyen Phong Hoang, Abbas Razaghpanah, Nicolas Christin, and Phillipa Gill. 2020. ICLab: A Global, Longitudinal Internet Censorship Measurement Platform. In IEEE Symposium on Security and Privacy (SP).
 
-[^3]: Ram Sundara Raman, Adrian Stoll, Jakub Dalek, Reethika Ramesh,
-Will Scott, and Roya Ensafi. 2020. Measuring the Deployment of Network
-Censorship Filters at Global Scale. In Proceedings of the Network and
-Distributed System Security Symposium (NDSS).
+[^3]: Ram Sundara Raman, Adrian Stoll, Jakub Dalek, Reethika Ramesh, Will Scott, and Roya Ensafi. 2020. Measuring the Deployment of Network Censorship Filters at Global Scale. In Proceedings of the Network and Distributed System Security Symposium (NDSS).
 
-[^4]: M. C. Tschantz, S. Afroz, Anonymous, and V. Paxson. 2016. SoK:
-Towards Grounding Censorship Circumvention in Empiricism.  In IEEE
-Symposium on Security and Privacy (SP).
+[^4]: M. C. Tschantz, S. Afroz, Anonymous, and V. Paxson. 2016. SoK: Towards Grounding Censorship Circumvention in Empiricism.  In IEEE Symposium on Security and Privacy (SP).
 
 [^5]: Niaki, *op. cit.*
