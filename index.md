@@ -1,7 +1,6 @@
 ## The Versātilis Project
 
-Contact [Micah Sherr](https://micahsherr.com) for more information.
-
+A project of the [Georgetown University SecLab](https://seclab.cs.georgetown.edu/).
 
 ### Description
 
