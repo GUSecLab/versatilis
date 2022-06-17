@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/guseclab/versatilis/pkg/versatilis"
+	versatilis "versatilis/pkg/versatilis"
 
 	log "github.com/sirupsen/logrus"
 )
