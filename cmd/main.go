@@ -7,6 +7,9 @@ import (
 )
 
 func main() {
+
+	log.SetLevel(log.DebugLevel)
+
 	log.Info("starting up")
 
 	versatilis.New()
