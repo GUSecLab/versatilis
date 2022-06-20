@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package versatilis;
+
+option go_package = "../versatilis";
+
+message Package {
+    string version = 10;
+
+    bytes noiseHandshakeInfo = 20;
+    bytes noiseCiphertext = 23;
+    bytes noiseAuthTag = 25;
+}

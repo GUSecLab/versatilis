@@ -2,10 +2,16 @@ package versatilis
 
 import (
 	"crypto/rand"
+	"encoding/json"
 
+	"github.com/Masterminds/semver"
 	"github.com/flynn/noise"
 	log "github.com/sirupsen/logrus"
 )
+
+const versionString = "v0.0.1"
+
+var Version *semver.Version
 
 type KeyType int64
 
@@ -26,23 +32,38 @@ func (k KeyType) String() string {
 }
 
 type State struct {
-	name        string
-	noiseConfig *noise.Config
+	Name                     string
+	initiator                bool
+	noiseConfig              *noise.Config
+	noiseHandshakeState      *noise.HandshakeState
+	handShakeCompleted       bool
+	handshakeSendRecvPattern []bool // "true"s indicate send events; "false" are receives
+	encryptState             *noise.CipherState
+	decryptState             *noise.CipherState
 }
 
 type Message struct {
-	Id      string
-	Payload interface{}
+	Id      string      `json:"id"`
+	Payload interface{} `json:"payload"`
 }
 
+type MessageBuffer []*Message
+
 func init() {
-	log.SetLevel(log.DebugLevel)
-	log.Debug("initializing Versātilis")
+	var err error
+	Version, err = semver.NewVersion(versionString)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func New(initiator bool, name string) *State {
+	var err error
+
 	state := new(State)
-	state.name = name
+	state.Name = name
+	state.initiator = initiator
+	state.handShakeCompleted = false
 
 	state.noiseConfig = &noise.Config{
 		CipherSuite: noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashSHA256),
@@ -50,20 +71,110 @@ func New(initiator bool, name string) *State {
 		Initiator:   initiator,
 		Pattern:     noise.HandshakeNN, // TODO
 	}
+
+	if state.initiator {
+		z := [...]bool{true, false}
+		state.handshakeSendRecvPattern = z[:]
+	} else {
+		z := [...]bool{false, true}
+		state.handshakeSendRecvPattern = z[:]
+	}
+
+	if state.noiseHandshakeState, err = noise.NewHandshakeState(*state.noiseConfig); err != nil {
+		panic(err)
+	}
+	log.Debugf("[%v] current handshake state message is %v", state.Name, state.noiseHandshakeState.MessageIndex())
+
 	return state
 }
 
-func (state *State) GenKey(keyType KeyType) {
-	key, err := noise.DH25519.GenerateKeypair(rand.Reader)
-	if err != nil {
-		panic("key generation failure")
-	}
-	switch keyType {
-	case KeyTypeEphemeral:
-		state.noiseConfig.StaticKeypair = key
-	case KeyTypeStatic:
-		state.noiseConfig.StaticKeypair = key
+func SetLogLevel(level log.Level) {
+	log.SetLevel(level)
+}
 
+func (state *State) DoHandshake(sendChannel chan *Package, recvChannel chan *Package) {
+	var out2 []byte
+	var err error
+
+	out := make([]byte, 0, 4096)
+
+	for _, action := range state.handshakeSendRecvPattern {
+		if action { // send event
+			out2, state.encryptState, state.decryptState, err =
+				state.noiseHandshakeState.WriteMessage(out, nil)
+			log.Debugf("[%v] sending message of length %v", state.Name, len(out2))
+
+			sendChannel <- &Package{
+				Version:            Version.String(),
+				NoiseHandshakeInfo: out2,
+			}
+		} else { // receive event
+			log.Debugf("[%v] waiting to receive message", state.Name)
+			p := <-recvChannel
+			log.Debugf("[%v] message received of length %v", state.Name, len(p.NoiseHandshakeInfo))
+			_, state.decryptState, state.encryptState, err =
+				state.noiseHandshakeState.ReadMessage(out, p.NoiseHandshakeInfo)
+		}
 	}
-	log.Debugf("[%v] generated new key %v of type '%v'", state.name, key, keyType)
+
+	if err != nil {
+		panic(err)
+	}
+	if state.encryptState != nil {
+		state.handShakeCompleted = true
+		log.Infof("[%v] handshake complete", state.Name)
+		log.Debugf("[%v] enc_state=%v; dec_state=%v", state.Name, state.encryptState, state.decryptState)
+	}
+}
+
+func (state *State) Send(sendChannel chan *Package, buffer *MessageBuffer) error {
+	for _, message := range *buffer {
+		plaintext, err := json.Marshal(message)
+		if err != nil {
+			return err
+		}
+		//ciphertext := make([]byte, 0)
+		ad := make([]byte, 16) // TODO
+		rand.Read(ad)
+
+		ciphertext, err := state.encryptState.Encrypt(nil, ad, plaintext)
+		if err != nil {
+			return err
+		}
+		log.Debugf("sending message %v", message)
+		sendChannel <- &Package{
+			Version:         Version.String(),
+			NoiseCiphertext: ciphertext,
+			NoiseAuthTag:    ad,
+		}
+	}
+	return nil
+}
+
+// receives a message or returns nil, nil if no message is available (if block is false)
+func (state *State) Receive(recvChannel chan *Package, block bool) (*Message, error) {
+
+	var p *Package
+
+	if block {
+		p = <-recvChannel
+	} else {
+		select {
+		case p = <-recvChannel:
+		default:
+			return nil, nil
+		}
+	}
+
+	plaintext, err := state.decryptState.Decrypt(nil, p.NoiseAuthTag, p.NoiseCiphertext)
+	if err != nil {
+		return nil, err
+	}
+	var message Message
+	err = json.Unmarshal(plaintext, &message)
+	if err != nil {
+		return nil, err
+	} else {
+		return &message, nil
+	}
 }

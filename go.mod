@@ -3,8 +3,10 @@ module versatilis
 go 1.18
 
 require (
+	github.com/Masterminds/semver v1.5.0
 	github.com/flynn/noise v1.0.0
 	github.com/sirupsen/logrus v1.8.1
+	google.golang.org/protobuf v1.28.0
 )
 
 require (
