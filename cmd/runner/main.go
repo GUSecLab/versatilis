@@ -7,11 +7,20 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func initiator(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
+func initiatorChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
 	log.Debug("starting initiator")
 	v := versatilis.New(true, "initiator")
 	log.Infof("I am %v", v.Name)
-	v.DoHandshake(toResponder, toInitiator)
+
+	listenAddress := &versatilis.Address{
+		Type:     versatilis.AddressTypeChan,
+		EndPoint: toInitiator,
+	}
+	dst := &versatilis.Address{
+		Type:     versatilis.AddressTypeChan,
+		EndPoint: toResponder,
+	}
+	v.DoHandshake(dst, listenAddress)
 
 	incomingSrc := &versatilis.Address{
 		Type:     versatilis.AddressTypeChan,
@@ -36,34 +45,32 @@ func initiator(done chan bool, toInitiator chan *versatilis.Package, toResponder
 	done <- true
 }
 
-func responder(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
+func responderChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
 	log.Debug("starting responder")
 	v := versatilis.New(false, "responder")
 	log.Infof("I am %v", v.Name)
-	v.DoHandshake(toInitiator, toResponder)
+
+	listenAddress := &versatilis.Address{
+		Type:     versatilis.AddressTypeChan,
+		EndPoint: toResponder,
+	}
+	dst := &versatilis.Address{
+		Type:     versatilis.AddressTypeChan,
+		EndPoint: toInitiator,
+	}
+
+	v.DoHandshake(dst, listenAddress)
 
 	// ...
 	buf := versatilis.MessageBuffer{}
 	for x := 0; x < 10; x++ {
 		m := &versatilis.Message{
-			Id: "type1",
-			Payload: struct {
-				First   string
-				Last    string
-				Counter int
-			}{
-				First:   "Micah",
-				Last:    "Sherr",
-				Counter: x,
-			},
+			Id:      "type1",
+			Payload: x,
 		}
 		buf = append(buf, m)
 	}
 
-	dst := &versatilis.Address{
-		Type:     versatilis.AddressTypeChan,
-		EndPoint: toInitiator,
-	}
 	if err := v.Send(dst, &buf); err != nil {
 		panic(err)
 	}
@@ -75,15 +82,17 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	versatilis.SetLogLevel(log.InfoLevel)
 
-	log.Info("starting up")
-
 	done := make(chan bool)
+
+	log.Info("starting up")
+	log.Info("doing some channel tests")
 	toInitiator := make(chan *versatilis.Package)
 	toResponder := make(chan *versatilis.Package)
 
-	go initiator(done, toInitiator, toResponder)
-	go responder(done, toInitiator, toResponder)
+	go initiatorChan(done, toInitiator, toResponder)
+	go responderChan(done, toInitiator, toResponder)
 
 	<-done
 	<-done
+
 }

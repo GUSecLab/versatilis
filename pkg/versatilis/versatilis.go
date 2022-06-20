@@ -92,7 +92,8 @@ func SetLogLevel(level log.Level) {
 	log.SetLevel(level)
 }
 
-func (state *State) DoHandshake(sendChannel chan *Package, recvChannel chan *Package) {
+func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
+	//	sendChannel chan *Package, recvChannel chan *Package) {
 	var out2 []byte
 	var err error
 
@@ -104,13 +105,19 @@ func (state *State) DoHandshake(sendChannel chan *Package, recvChannel chan *Pac
 				state.noiseHandshakeState.WriteMessage(out, nil)
 			log.Debugf("[%v] sending message of length %v", state.Name, len(out2))
 
-			sendChannel <- &Package{
+			if err := send(dst, &Package{
 				Version:            Version.String(),
 				NoiseHandshakeInfo: out2,
+			}); err != nil {
+				panic(err)
 			}
 		} else { // receive event
 			log.Debugf("[%v] waiting to receive message", state.Name)
-			p := <-recvChannel
+			var p *Package
+			p, err = recv(listenAddress, true)
+			if err != nil {
+				panic(err)
+			}
 			log.Debugf("[%v] message received of length %v", state.Name, len(p.NoiseHandshakeInfo))
 			_, state.decryptState, state.encryptState, err =
 				state.noiseHandshakeState.ReadMessage(out, p.NoiseHandshakeInfo)
