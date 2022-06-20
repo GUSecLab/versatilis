@@ -3,9 +3,11 @@ package versatilis
 type AddressType int64
 
 const (
-	AddressTypeIP AddressType = iota
+	AddressTypeInvalid AddressType = iota
+	AddressTypeIP
 	AddressTypeHostname
 	AddressTypeDHT
+	AddressTypeChan
 )
 
 type Address struct {

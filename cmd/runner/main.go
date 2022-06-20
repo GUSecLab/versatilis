@@ -13,9 +13,14 @@ func initiator(done chan bool, toInitiator chan *versatilis.Package, toResponder
 	log.Infof("I am %v", v.Name)
 	v.DoHandshake(toResponder, toInitiator)
 
+	incomingSrc := &versatilis.Address{
+		Type:     versatilis.AddressTypeChan,
+		EndPoint: toInitiator,
+	}
+
 	// ...
 	for i := 0; i < 15; i++ {
-		m, err := v.Receive(toInitiator, false)
+		m, err := v.Receive(incomingSrc, false)
 		if err != nil {
 			panic(err)
 		} else {
@@ -36,7 +41,6 @@ func responder(done chan bool, toInitiator chan *versatilis.Package, toResponder
 	v := versatilis.New(false, "responder")
 	log.Infof("I am %v", v.Name)
 	v.DoHandshake(toInitiator, toResponder)
-	done <- true
 
 	// ...
 	buf := versatilis.MessageBuffer{}
@@ -56,10 +60,14 @@ func responder(done chan bool, toInitiator chan *versatilis.Package, toResponder
 		buf = append(buf, m)
 	}
 
-	if err := v.Send(toInitiator, &buf); err != nil {
+	dst := &versatilis.Address{
+		Type:     versatilis.AddressTypeChan,
+		EndPoint: toInitiator,
+	}
+	if err := v.Send(dst, &buf); err != nil {
 		panic(err)
 	}
-
+	done <- true
 }
 
 func main() {

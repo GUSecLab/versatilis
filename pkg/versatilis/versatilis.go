@@ -127,7 +127,7 @@ func (state *State) DoHandshake(sendChannel chan *Package, recvChannel chan *Pac
 	}
 }
 
-func (state *State) Send(sendChannel chan *Package, buffer *MessageBuffer) error {
+func (state *State) Send(dst *Address, buffer *MessageBuffer) error {
 	for _, message := range *buffer {
 		plaintext, err := json.Marshal(message)
 		if err != nil {
@@ -142,28 +142,27 @@ func (state *State) Send(sendChannel chan *Package, buffer *MessageBuffer) error
 			return err
 		}
 		log.Debugf("sending message %v", message)
-		sendChannel <- &Package{
+
+		if err := send(dst, &Package{
 			Version:         Version.String(),
 			NoiseCiphertext: ciphertext,
 			NoiseAuthTag:    ad,
+		}); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
 // receives a message or returns nil, nil if no message is available (if block is false)
-func (state *State) Receive(recvChannel chan *Package, block bool) (*Message, error) {
+func (state *State) Receive(listenAddress *Address, block bool) (*Message, error) {
 
-	var p *Package
-
-	if block {
-		p = <-recvChannel
-	} else {
-		select {
-		case p = <-recvChannel:
-		default:
-			return nil, nil
-		}
+	p, err := recv(listenAddress, block)
+	if err != nil {
+		return nil, err
+	}
+	if p == nil {
+		return nil, nil
 	}
 
 	plaintext, err := state.decryptState.Decrypt(nil, p.NoiseAuthTag, p.NoiseCiphertext)
