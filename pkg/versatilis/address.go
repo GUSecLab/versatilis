@@ -4,6 +4,7 @@ type AddressType int64
 
 const (
 	AddressTypeInvalid AddressType = iota
+	AddressTypeNetConn
 	AddressTypeIP
 	AddressTypeHostname
 	AddressTypeDHT

@@ -1,6 +1,12 @@
 package versatilis
 
-import "errors"
+import (
+	"errors"
+	"io"
+	"net"
+
+	"google.golang.org/protobuf/proto"
+)
 
 func send(dst *Address, p *Package) error {
 	switch dst.Type {
@@ -10,6 +16,17 @@ func send(dst *Address, p *Package) error {
 			return errors.New("invalid address")
 		}
 		ch <- p // send it!
+		return nil
+	case AddressTypeNetConn:
+		conn, ok := dst.EndPoint.(*net.Conn)
+		if !ok {
+			return errors.New("invalid address")
+		}
+		buf, err := proto.Marshal(p)
+		if err != nil {
+			return err
+		}
+		(*conn).Write(buf)
 		return nil
 	default:
 		return errors.New("unsupport address type")
@@ -35,6 +52,31 @@ func recv(listenAddress *Address, block bool) (*Package, error) {
 				return nil, nil // no data available
 			}
 		}
+
+	case AddressTypeNetConn:
+		conn, ok := listenAddress.EndPoint.(*net.Conn)
+		if !ok {
+			return nil, errors.New("invalid address")
+		}
+		bigbuf := make([]byte, 4096)
+		smallbuf := make([]byte, 4096)
+		for {
+			n, err := (*conn).Read(smallbuf)
+			if err != nil {
+				if err == io.EOF {
+					break
+				} else {
+					return nil, err
+				}
+			}
+			bigbuf = append(bigbuf, smallbuf[:n]...)
+		}
+		p := &Package{}
+		if err := proto.Unmarshal(bigbuf, p); err != nil {
+			return nil, err
+		}
+		return p, nil
+
 	default:
 		return nil, errors.New("unsupport address type")
 	}
