@@ -5,6 +5,8 @@ import (
 	"io"
 	"net"
 
+	log "github.com/sirupsen/logrus"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -61,7 +63,9 @@ func recv(listenAddress *Address, block bool) (*Package, error) {
 		bigbuf := make([]byte, 4096)
 		smallbuf := make([]byte, 4096)
 		for {
+			log.Debug("[tcp] before read")
 			n, err := (*conn).Read(smallbuf)
+			log.Debugf("[tcp] after read; n is %v", n)
 			if err != nil {
 				if err == io.EOF {
 					break

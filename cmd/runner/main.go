@@ -79,9 +79,9 @@ func responderChan(done chan bool, toInitiator chan *versatilis.Package, toRespo
 }
 
 func initiatorTCP(done chan bool) {
-	log.Debug("starting TCP initiator")
+	log.Debug("[tcp] starting TCP initiator")
 	v := versatilis.New(true, "initiator")
-	log.Infof("I am %v", v.Name)
+	log.Infof("[tcp] I am %v", v.Name)
 
 	conn, err := net.Dial("tcp", "localhost:9999")
 	if err != nil {
@@ -96,27 +96,23 @@ func initiatorTCP(done chan bool) {
 	v.DoHandshake(addressConn, addressConn)
 
 	// ...
-	for i := 0; i < 15; i++ {
-		m, err := v.Receive(addressConn, false)
-		if err != nil {
-			panic(err)
+	m, err := v.Receive(addressConn, true)
+	if err != nil {
+		panic(err)
+	} else {
+		if m != nil {
+			log.Infof("[tcp] initiator received %v", m)
 		} else {
-			if m != nil {
-				log.Infof("initiator received %v", m)
-			} else {
-				log.Info("Initiator received no message")
-			}
+			log.Info("[tcp] initiator received no message")
 		}
-		time.Sleep(time.Millisecond * 100)
 	}
-
 	done <- true
 }
 
 func responderTCP(done chan bool) {
-	log.Debug("starting TCP responder")
+	log.Debug("[tcp] starting TCP responder")
 	v := versatilis.New(false, "responder")
-	log.Infof("I am %v", v.Name)
+	log.Infof("[tcp] I am %v", v.Name)
 
 	ln, err := net.Listen("tcp", "localhost:9999")
 	if err != nil {
@@ -127,6 +123,7 @@ func responderTCP(done chan bool) {
 	if err != nil {
 		panic(err)
 	}
+	log.Debugf("[tcp] connection established from %v", conn)
 
 	addressConn := &versatilis.Address{
 		Type:     versatilis.AddressTypeNetConn,
@@ -137,13 +134,11 @@ func responderTCP(done chan bool) {
 
 	// ...
 	buf := versatilis.MessageBuffer{}
-	for x := 0; x < 10; x++ {
-		m := &versatilis.Message{
-			Id:      "type1",
-			Payload: x,
-		}
-		buf = append(buf, m)
+	m := &versatilis.Message{
+		Id:      "type2",
+		Payload: "this is a message sent via TCP",
 	}
+	buf = append(buf, m)
 
 	if err := v.Send(addressConn, &buf); err != nil {
 		panic(err)
@@ -173,7 +168,7 @@ func main() {
 	time.Sleep(time.Second * 3)
 
 	go responderTCP(done)
-	time.Sleep(time.Second * 1)
+	time.Sleep(time.Second * 5)
 	go initiatorTCP(done)
 
 	<-done
