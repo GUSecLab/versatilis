@@ -59,6 +59,14 @@ func initiatorTCP(done chan bool) {
 	done <- true
 }
 
+func responder(dst *versatilis.Address, listenAddress *versatilis.Address, msg any) {
+	v := versatilis.New(false, "responder")
+	log.Infof("I am %v", v.Name)
+	v.DoHandshake(dst, listenAddress)
+
+	v.Write(msg)
+}
+
 func responderChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
 	log.Debug("starting responder")
 
@@ -74,23 +82,6 @@ func responderChan(done chan bool, toInitiator chan *versatilis.Package, toRespo
 	responder(dst, listenAddress, "testing")
 
 	done <- true
-}
-
-func responder(dst *versatilis.Address, listenAddress *versatilis.Address, msg any) {
-	v := versatilis.New(false, "responder")
-	log.Infof("I am %v", v.Name)
-	v.DoHandshake(dst, listenAddress)
-
-	buf := versatilis.MessageBuffer{}
-	m := &versatilis.Message{
-		Id:      "",
-		Payload: msg,
-	}
-	buf = append(buf, m)
-
-	if err := v.Send(dst, &buf); err != nil {
-		panic(err)
-	}
 }
 
 func responderTCP(done chan bool) {

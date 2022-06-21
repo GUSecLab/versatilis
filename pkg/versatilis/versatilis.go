@@ -24,6 +24,9 @@ type State struct {
 	handshakeSendRecvPattern []bool // "true"s indicate send events; "false" are receives
 	encryptState             *noise.CipherState
 	decryptState             *noise.CipherState
+	connected                bool
+	dst                      *Address
+	listenAddress            *Address
 }
 
 type Message struct {
@@ -48,6 +51,7 @@ func New(initiator bool, name string) *State {
 	state.Name = name
 	state.initiator = initiator
 	state.handShakeCompleted = false
+	state.connected = false
 
 	state.noiseConfig = &noise.Config{
 		CipherSuite: noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashSHA256),
@@ -113,6 +117,8 @@ func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
 	}
 	if state.encryptState != nil {
 		state.handShakeCompleted = true
+		state.dst = dst
+		state.listenAddress = listenAddress
 		log.Infof("[%v] handshake complete", state.Name)
 		log.Debugf("[%v] enc_state=%v; dec_state=%v", state.Name, state.encryptState, state.decryptState)
 	}

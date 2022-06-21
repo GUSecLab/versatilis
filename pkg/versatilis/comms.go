@@ -10,6 +10,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type VersatilisDialer struct{}
+
 func send(dst *Address, p *Package) error {
 	switch dst.Type {
 	case AddressTypeChan:
@@ -85,4 +87,34 @@ func recv(listenAddress *Address, block bool) (*Package, error) {
 	default:
 		return nil, errors.New("unsupport address type")
 	}
+}
+
+func (state *State) Dial(t AddressType, address any) (net.Conn, error) {
+	if address == nil {
+		return nil, errors.New("invalid address")
+	}
+	switch t {
+	case AddressTypeTCP:
+		s, ok := address.(string)
+		if !ok {
+			return nil, errors.New("invalid address")
+		}
+		state.connected = true
+		return net.Dial("tcp", s)
+	default:
+		return nil, errors.New("unsupported address type")
+	}
+}
+
+func (state *State) Write(b any) (n int, err error) {
+	buf := MessageBuffer{}
+	m := &Message{
+		Id:      "write",
+		Payload: b,
+	}
+	buf = append(buf, m)
+	if err := state.Send(state.dst, &buf); err != nil {
+		return 0, err
+	}
+	return 0, nil
 }
