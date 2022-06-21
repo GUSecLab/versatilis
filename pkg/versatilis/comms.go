@@ -19,7 +19,7 @@ func send(dst *Address, p *Package) error {
 		}
 		ch <- p // send it!
 		return nil
-	case AddressTypeNetTCP:
+	case AddressTypeTCP:
 		conn, ok := dst.EndPoint.(*net.Conn)
 		if !ok {
 			return errors.New("invalid address")
@@ -58,7 +58,7 @@ func recv(listenAddress *Address, block bool) (*Package, error) {
 			}
 		}
 
-	case AddressTypeNetTCP:
+	case AddressTypeTCP:
 		conn, ok := listenAddress.EndPoint.(*net.Conn)
 		if !ok {
 			return nil, errors.New("invalid address")
