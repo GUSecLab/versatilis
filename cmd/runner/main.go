@@ -59,12 +59,12 @@ func initiatorTCP(done chan bool) {
 	done <- true
 }
 
-func responder(dst *versatilis.Address, listenAddress *versatilis.Address, msg any) {
+func responder(dst *versatilis.Address, listenAddress *versatilis.Address, msg string) {
 	v := versatilis.New(false, "responder")
 	log.Infof("I am %v", v.Name)
 	v.DoHandshake(dst, listenAddress)
 
-	v.Write(msg)
+	v.Write([]byte(msg))
 }
 
 func responderChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {

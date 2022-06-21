@@ -106,12 +106,9 @@ func (state *State) Dial(t AddressType, address any) (net.Conn, error) {
 	}
 }
 
-func (state *State) Write(b any) (n int, err error) {
+func (state *State) Write(b []byte) (n int, err error) {
 	buf := MessageBuffer{}
-	m := &Message{
-		Id:      "write",
-		Payload: b,
-	}
+	m := &Message{BytesMessage: b}
 	buf = append(buf, m)
 	if err := state.Send(state.dst, &buf); err != nil {
 		return 0, err

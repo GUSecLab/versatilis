@@ -3,11 +3,11 @@ package versatilis
 import (
 	"crypto/rand"
 	_ "embed"
-	"encoding/json"
 
 	"github.com/Masterminds/semver"
 	"github.com/flynn/noise"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 )
 
 //go:embed version.md
@@ -27,12 +27,6 @@ type State struct {
 	connected                bool
 	dst                      *Address
 	listenAddress            *Address
-}
-
-// TODO: move Message to a .proto
-type Message struct {
-	Id      string `json:"id"`
-	Payload any    `json:"payload"`
 }
 
 type MessageBuffer []*Message
@@ -127,7 +121,8 @@ func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
 
 func (state *State) Send(dst *Address, buffer *MessageBuffer) error {
 	for _, message := range *buffer {
-		plaintext, err := json.Marshal(message)
+
+		plaintext, err := proto.Marshal(message)
 		if err != nil {
 			return err
 		}
@@ -167,7 +162,7 @@ func (state *State) Receive(listenAddress *Address, block bool) (*Message, error
 		return nil, err
 	}
 	var message Message
-	err = json.Unmarshal(plaintext, &message)
+	err = proto.Unmarshal(plaintext, &message)
 	if err != nil {
 		return nil, err
 	} else {
