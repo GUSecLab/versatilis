@@ -8,84 +8,45 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func initiatorChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
-	log.Debug("starting initiator")
+func initiator(dst *versatilis.Address, listenAddress *versatilis.Address) {
 	v := versatilis.New(true, "initiator")
 	log.Infof("I am %v", v.Name)
 
-	listenAddress := &versatilis.Address{
-		Type:     versatilis.AddressTypeChan,
-		EndPoint: toInitiator,
-	}
-	dst := &versatilis.Address{
-		Type:     versatilis.AddressTypeChan,
-		EndPoint: toResponder,
-	}
 	v.DoHandshake(dst, listenAddress)
 
-	incomingSrc := &versatilis.Address{
-		Type:     versatilis.AddressTypeChan,
-		EndPoint: toInitiator,
+	m, err := v.Receive(listenAddress, true)
+	if err != nil {
+		panic(err)
+	} else {
+		log.Infof("initiator received %v", m)
 	}
-
-	// ...
-	for i := 0; i < 15; i++ {
-		m, err := v.Receive(incomingSrc, false)
-		if err != nil {
-			panic(err)
-		} else {
-			if m != nil {
-				log.Infof("initiator received %v", m)
-			} else {
-				log.Info("Initiator received no message")
-			}
-		}
-		time.Sleep(time.Millisecond * 100)
-	}
-
-	done <- true
 }
 
-func responderChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
-	log.Debug("starting responder")
-	v := versatilis.New(false, "responder")
-	log.Infof("I am %v", v.Name)
+func initiatorChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
+	log.Debug("starting initiator")
 
 	listenAddress := &versatilis.Address{
 		Type:     versatilis.AddressTypeChan,
-		EndPoint: toResponder,
+		EndPoint: toInitiator,
 	}
 	dst := &versatilis.Address{
 		Type:     versatilis.AddressTypeChan,
-		EndPoint: toInitiator,
+		EndPoint: toResponder,
 	}
 
-	v.DoHandshake(dst, listenAddress)
+	initiator(dst, listenAddress)
 
-	// ...
-	buf := versatilis.MessageBuffer{}
-	for x := 0; x < 10; x++ {
-		m := &versatilis.Message{
-			Id:      "type1",
-			Payload: x,
-		}
-		buf = append(buf, m)
-	}
-
-	if err := v.Send(dst, &buf); err != nil {
-		panic(err)
-	}
 	done <- true
 }
 
 func initiatorTCP(done chan bool) {
 	log.Debug("[tcp] starting TCP initiator")
-	v := versatilis.New(true, "initiator")
-	log.Infof("[tcp] I am %v", v.Name)
 
 	conn, err := net.Dial("tcp", "localhost:9999")
 	if err != nil {
 		panic(err)
+	} else {
+		defer conn.Close()
 	}
 
 	addressConn := &versatilis.Address{
@@ -93,26 +54,47 @@ func initiatorTCP(done chan bool) {
 		EndPoint: &conn,
 	}
 
-	v.DoHandshake(addressConn, addressConn)
+	initiator(addressConn, addressConn)
 
-	// ...
-	m, err := v.Receive(addressConn, true)
-	if err != nil {
-		panic(err)
-	} else {
-		if m != nil {
-			log.Infof("[tcp] initiator received %v", m)
-		} else {
-			log.Info("[tcp] initiator received no message")
-		}
-	}
 	done <- true
+}
+
+func responderChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
+	log.Debug("starting responder")
+
+	listenAddress := &versatilis.Address{
+		Type:     versatilis.AddressTypeChan,
+		EndPoint: toResponder,
+	}
+	dst := &versatilis.Address{
+		Type:     versatilis.AddressTypeChan,
+		EndPoint: toInitiator,
+	}
+
+	responder(dst, listenAddress, "testing")
+
+	done <- true
+}
+
+func responder(dst *versatilis.Address, listenAddress *versatilis.Address, msg any) {
+	v := versatilis.New(false, "responder")
+	log.Infof("I am %v", v.Name)
+	v.DoHandshake(dst, listenAddress)
+
+	buf := versatilis.MessageBuffer{}
+	m := &versatilis.Message{
+		Id:      "",
+		Payload: msg,
+	}
+	buf = append(buf, m)
+
+	if err := v.Send(dst, &buf); err != nil {
+		panic(err)
+	}
 }
 
 func responderTCP(done chan bool) {
 	log.Debug("[tcp] starting TCP responder")
-	v := versatilis.New(false, "responder")
-	log.Infof("[tcp] I am %v", v.Name)
 
 	ln, err := net.Listen("tcp", "localhost:9999")
 	if err != nil {
@@ -122,6 +104,9 @@ func responderTCP(done chan bool) {
 	conn, err := ln.Accept()
 	if err != nil {
 		panic(err)
+	} else {
+		defer conn.Close()
+		defer ln.Close()
 	}
 	log.Debugf("[tcp] connection established from %v", conn)
 
@@ -130,19 +115,8 @@ func responderTCP(done chan bool) {
 		EndPoint: &conn,
 	}
 
-	v.DoHandshake(addressConn, addressConn)
+	responder(addressConn, addressConn, "hello world")
 
-	// ...
-	buf := versatilis.MessageBuffer{}
-	m := &versatilis.Message{
-		Id:      "type2",
-		Payload: "this is a message sent via TCP",
-	}
-	buf = append(buf, m)
-
-	if err := v.Send(addressConn, &buf); err != nil {
-		panic(err)
-	}
 	done <- true
 }
 
