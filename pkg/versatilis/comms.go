@@ -109,7 +109,8 @@ func (state *State) Dial(t AddressType, address any) (net.Conn, error) {
 func (state *State) Write(b []byte) (n int, err error) {
 	buf := MessageBuffer{}
 	m := &Message{BytesMessage: b}
-	buf = append(buf, m)
+	buf.Messages = append(buf.Messages, m)
+	//buf = append(buf, m)
 	if err := state.Send(state.dst, &buf); err != nil {
 		return 0, err
 	}

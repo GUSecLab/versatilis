@@ -14,11 +14,13 @@ func initiator(dst *versatilis.Address, listenAddress *versatilis.Address) {
 
 	v.DoHandshake(dst, listenAddress)
 
-	m, err := v.Receive(listenAddress, true)
+	messages, err := v.Receive(listenAddress, true)
 	if err != nil {
 		panic(err)
-	} else {
-		log.Infof("initiator received %v", m)
+	}
+
+	for _, message := range messages.Messages {
+		log.Infof("initiator received %v", message)
 	}
 }
 
@@ -129,11 +131,11 @@ func main() {
 	<-done
 	<-done
 
-	log.Info("waiting 3 seconds for next test")
-	time.Sleep(time.Second * 3)
+	log.Info("waiting 1 second1 for next test")
+	time.Sleep(time.Second * 1)
 
 	go responderTCP(done)
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 1)
 	go initiatorTCP(done)
 
 	<-done

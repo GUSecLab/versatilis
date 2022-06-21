@@ -9,6 +9,10 @@ message Message {
     bytes bytesMessage = 20;
 }
 
+message MessageBuffer {
+    repeated Message messages = 1;
+}
+
 message Package {
     string version = 10;
 

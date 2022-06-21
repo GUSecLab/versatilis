@@ -29,8 +29,6 @@ type State struct {
 	listenAddress            *Address
 }
 
-type MessageBuffer []*Message
-
 func init() {
 	var err error
 	Version, err = semver.NewVersion(versionString)
@@ -120,34 +118,33 @@ func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
 }
 
 func (state *State) Send(dst *Address, buffer *MessageBuffer) error {
-	for _, message := range *buffer {
 
-		plaintext, err := proto.Marshal(message)
-		if err != nil {
-			return err
-		}
-		ad := make([]byte, 16)
-		rand.Read(ad)
-
-		ciphertext, err := state.encryptState.Encrypt(nil, ad, plaintext)
-		if err != nil {
-			return err
-		}
-		log.Debugf("sending message %v", message)
-
-		if err := send(dst, &Package{
-			Version:         Version.String(),
-			NoiseCiphertext: ciphertext,
-			NoiseAuthTag:    ad,
-		}); err != nil {
-			return err
-		}
+	plaintext, err := proto.Marshal(buffer)
+	if err != nil {
+		return err
 	}
+	ad := make([]byte, 16)
+	rand.Read(ad)
+
+	ciphertext, err := state.encryptState.Encrypt(nil, ad, plaintext)
+	if err != nil {
+		return err
+	}
+	log.Debugf("sending %v messages", len((*buffer).Messages))
+
+	if err := send(dst, &Package{
+		Version:         Version.String(),
+		NoiseCiphertext: ciphertext,
+		NoiseAuthTag:    ad,
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // receives a message or returns nil, nil if no message is available (if block is false)
-func (state *State) Receive(listenAddress *Address, block bool) (*Message, error) {
+func (state *State) Receive(listenAddress *Address, block bool) (*MessageBuffer, error) {
 
 	p, err := recv(listenAddress, block)
 	if err != nil {
@@ -161,11 +158,11 @@ func (state *State) Receive(listenAddress *Address, block bool) (*Message, error
 	if err != nil {
 		return nil, err
 	}
-	var message Message
-	err = proto.Unmarshal(plaintext, &message)
+	var messages MessageBuffer
+	err = proto.Unmarshal(plaintext, &messages)
 	if err != nil {
 		return nil, err
 	} else {
-		return &message, nil
+		return &messages, nil
 	}
 }
