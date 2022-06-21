@@ -118,3 +118,5 @@ func (state *State) Write(b any) (n int, err error) {
 	}
 	return 0, nil
 }
+
+// TODO: implement Read
