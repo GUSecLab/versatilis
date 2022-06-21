@@ -13,8 +13,6 @@ import (
 
 type VersatilisDialer struct{}
 
-type readBuffer []byte
-
 // internal helper function that actually sends a Package via the appropriate
 // transport protocol to the address specified by Address
 func sendPackageViaTransport(dst *Address, p *Package) error {
