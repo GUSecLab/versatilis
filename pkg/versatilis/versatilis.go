@@ -29,6 +29,7 @@ type State struct {
 	listenAddress            *Address
 }
 
+// TODO: move Message to a .proto
 type Message struct {
 	Id      string `json:"id"`
 	Payload any    `json:"payload"`
@@ -60,7 +61,7 @@ func New(initiator bool, name string) *State {
 		Pattern:     noise.HandshakeNN, // TODO
 	}
 
-	if state.initiator {
+	if state.initiator { // TODO: this is specific to noise.HandshakeNN
 		z := [...]bool{true, false}
 		state.handshakeSendRecvPattern = z[:]
 	} else {
