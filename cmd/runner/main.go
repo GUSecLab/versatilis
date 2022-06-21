@@ -14,14 +14,24 @@ func initiator(dst *versatilis.Address, listenAddress *versatilis.Address) {
 
 	v.DoHandshake(dst, listenAddress)
 
-	messages, err := v.Receive(listenAddress, true)
-	if err != nil {
+	var n int
+	var err error
+	b := make([]byte, 50)
+
+	if n, err = v.Read(b); err != nil {
 		panic(err)
 	}
+	b = b[:n]
+	log.Infof("initiator received %v", string(b))
 
-	for _, message := range messages.Messages {
-		log.Infof("initiator received %v", message)
-	}
+	/*
+		mb, err := v.Receive(listenAddress, true)
+		if err != nil {
+			panic(err)
+		} else {
+			log.Info("initiator received: %v", mb)
+		}
+	*/
 }
 
 func initiatorChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
@@ -131,7 +141,7 @@ func main() {
 	<-done
 	<-done
 
-	log.Info("waiting 1 second1 for next test")
+	log.Info("waiting 1 second for next test")
 	time.Sleep(time.Second * 1)
 
 	go responderTCP(done)

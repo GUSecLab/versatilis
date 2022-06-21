@@ -5,8 +5,10 @@ package versatilis;
 option go_package = "../versatilis";
 
 message Message {
-    string stringMessage = 10;
-    bytes bytesMessage = 20;
+    oneof payload {
+        string stringMessage = 10;
+        bytes bytesMessage = 20;
+    }
 }
 
 message MessageBuffer {

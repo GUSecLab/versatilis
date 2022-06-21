@@ -3,11 +3,11 @@ package versatilis
 import (
 	"crypto/rand"
 	_ "embed"
+	sync "sync"
 
 	"github.com/Masterminds/semver"
 	"github.com/flynn/noise"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 //go:embed version.md
@@ -27,6 +27,8 @@ type State struct {
 	connected                bool
 	dst                      *Address
 	listenAddress            *Address
+	readBuffer               readBuffer
+	readMu                   *sync.Mutex
 }
 
 func init() {
@@ -45,6 +47,8 @@ func New(initiator bool, name string) *State {
 	state.initiator = initiator
 	state.handShakeCompleted = false
 	state.connected = false
+	state.readBuffer = make([]byte, 0)
+	state.readMu = &sync.Mutex{}
 
 	state.noiseConfig = &noise.Config{
 		CipherSuite: noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashSHA256),
@@ -74,7 +78,6 @@ func SetLogLevel(level log.Level) {
 }
 
 func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
-	//	sendChannel chan *Package, recvChannel chan *Package) {
 	var out2 []byte
 	var err error
 
@@ -86,7 +89,7 @@ func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
 				state.noiseHandshakeState.WriteMessage(out, nil)
 			log.Debugf("[%v] sending message of length %v", state.Name, len(out2))
 
-			if err := send(dst, &Package{
+			if err := sendPackageViaTransport(dst, &Package{
 				Version:            Version.String(),
 				NoiseHandshakeInfo: out2,
 			}); err != nil {
@@ -95,7 +98,7 @@ func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
 		} else { // receive event
 			log.Debugf("[%v] waiting to receive message", state.Name)
 			var p *Package
-			p, err = recv(listenAddress, true)
+			p, err = recvPackageViaTransport(listenAddress, true)
 			if err != nil {
 				panic(err)
 			}
@@ -114,55 +117,5 @@ func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
 		state.listenAddress = listenAddress
 		log.Infof("[%v] handshake complete", state.Name)
 		log.Debugf("[%v] enc_state=%v; dec_state=%v", state.Name, state.encryptState, state.decryptState)
-	}
-}
-
-func (state *State) Send(dst *Address, buffer *MessageBuffer) error {
-
-	plaintext, err := proto.Marshal(buffer)
-	if err != nil {
-		return err
-	}
-	ad := make([]byte, 16)
-	rand.Read(ad)
-
-	ciphertext, err := state.encryptState.Encrypt(nil, ad, plaintext)
-	if err != nil {
-		return err
-	}
-	log.Debugf("sending %v messages", len((*buffer).Messages))
-
-	if err := send(dst, &Package{
-		Version:         Version.String(),
-		NoiseCiphertext: ciphertext,
-		NoiseAuthTag:    ad,
-	}); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// receives a message or returns nil, nil if no message is available (if block is false)
-func (state *State) Receive(listenAddress *Address, block bool) (*MessageBuffer, error) {
-
-	p, err := recv(listenAddress, block)
-	if err != nil {
-		return nil, err
-	}
-	if p == nil {
-		return nil, nil
-	}
-
-	plaintext, err := state.decryptState.Decrypt(nil, p.NoiseAuthTag, p.NoiseCiphertext)
-	if err != nil {
-		return nil, err
-	}
-	var messages MessageBuffer
-	err = proto.Unmarshal(plaintext, &messages)
-	if err != nil {
-		return nil, err
-	} else {
-		return &messages, nil
 	}
 }
