@@ -14,5 +14,5 @@ const (
 
 type Address struct {
 	Type     AddressType
-	EndPoint interface{}
+	EndPoint any
 }

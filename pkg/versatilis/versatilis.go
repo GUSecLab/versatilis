@@ -27,8 +27,8 @@ type State struct {
 }
 
 type Message struct {
-	Id      string      `json:"id"`
-	Payload interface{} `json:"payload"`
+	Id      string `json:"id"`
+	Payload any    `json:"payload"`
 }
 
 type MessageBuffer []*Message
@@ -124,8 +124,7 @@ func (state *State) Send(dst *Address, buffer *MessageBuffer) error {
 		if err != nil {
 			return err
 		}
-		//ciphertext := make([]byte, 0)
-		ad := make([]byte, 16) // TODO
+		ad := make([]byte, 16)
 		rand.Read(ad)
 
 		ciphertext, err := state.encryptState.Encrypt(nil, ad, plaintext)
