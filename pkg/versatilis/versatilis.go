@@ -2,6 +2,7 @@ package versatilis
 
 import (
 	"crypto/rand"
+	_ "embed"
 	"encoding/json"
 
 	"github.com/Masterminds/semver"
@@ -9,7 +10,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const versionString = "v0.0.1"
+//go:embed version.md
+var versionString string
 
 var Version *semver.Version
 
