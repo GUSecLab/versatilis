@@ -89,7 +89,7 @@ func initiatorTCP(done chan bool) {
 	}
 
 	addressConn := &versatilis.Address{
-		Type:     versatilis.AddressTypeNetConn,
+		Type:     versatilis.AddressTypeNetTCP,
 		EndPoint: &conn,
 	}
 
@@ -126,7 +126,7 @@ func responderTCP(done chan bool) {
 	log.Debugf("[tcp] connection established from %v", conn)
 
 	addressConn := &versatilis.Address{
-		Type:     versatilis.AddressTypeNetConn,
+		Type:     versatilis.AddressTypeNetTCP,
 		EndPoint: &conn,
 	}
 
@@ -148,8 +148,8 @@ func responderTCP(done chan bool) {
 
 func main() {
 
-	log.SetLevel(log.DebugLevel)
-	versatilis.SetLogLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
+	versatilis.SetLogLevel(log.InfoLevel)
 
 	done := make(chan bool)
 

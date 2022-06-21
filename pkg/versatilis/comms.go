@@ -1,11 +1,11 @@
 package versatilis
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"io"
 	"net"
-
-	log "github.com/sirupsen/logrus"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -19,7 +19,7 @@ func send(dst *Address, p *Package) error {
 		}
 		ch <- p // send it!
 		return nil
-	case AddressTypeNetConn:
+	case AddressTypeNetTCP:
 		conn, ok := dst.EndPoint.(*net.Conn)
 		if !ok {
 			return errors.New("invalid address")
@@ -28,6 +28,9 @@ func send(dst *Address, p *Package) error {
 		if err != nil {
 			return err
 		}
+		l := make([]byte, 2)
+		binary.LittleEndian.PutUint16(l, uint16(len(buf)))
+		(*conn).Write(l)
 		(*conn).Write(buf)
 		return nil
 	default:
@@ -55,25 +58,23 @@ func recv(listenAddress *Address, block bool) (*Package, error) {
 			}
 		}
 
-	case AddressTypeNetConn:
+	case AddressTypeNetTCP:
 		conn, ok := listenAddress.EndPoint.(*net.Conn)
 		if !ok {
 			return nil, errors.New("invalid address")
 		}
-		bigbuf := make([]byte, 4096)
-		smallbuf := make([]byte, 4096)
-		for {
-			log.Debug("[tcp] before read")
-			n, err := (*conn).Read(smallbuf)
-			log.Debugf("[tcp] after read; n is %v", n)
-			if err != nil {
-				if err == io.EOF {
-					break
-				} else {
-					return nil, err
-				}
-			}
-			bigbuf = append(bigbuf, smallbuf[:n]...)
+		lbe := make([]byte, 2)
+		if n, err := io.ReadFull(*conn, lbe); err != nil || n != 2 {
+			return nil, errors.New("invalid message")
+		}
+		var l uint16
+		buf := bytes.NewReader(lbe)
+		if err := binary.Read(buf, binary.LittleEndian, &l); err != nil {
+			return nil, err
+		}
+		bigbuf := make([]byte, l)
+		if n, err := io.ReadFull(*conn, bigbuf); err != nil || n != int(l) {
+			return nil, errors.New("invalid message")
 		}
 		p := &Package{}
 		if err := proto.Unmarshal(bigbuf, p); err != nil {
