@@ -1,3 +1,5 @@
+[![Go](https://github.com/GUSecLab/versatilis/actions/workflows/go.yml/badge.svg)](https://github.com/GUSecLab/versatilis/actions/workflows/go.yml)
+
 # Versātilis
 Tech&amp;Humanities Versatilis Project
 
