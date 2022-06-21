@@ -15,24 +15,6 @@ var versionString string
 
 var Version *semver.Version
 
-type KeyType int64
-
-const (
-	KeyTypeStatic KeyType = iota
-	KeyTypeEphemeral
-)
-
-func (k KeyType) String() string {
-	switch k {
-	case KeyTypeEphemeral:
-		return "ephemeral"
-	case KeyTypeStatic:
-		return "static"
-	default:
-		panic("no such key type")
-	}
-}
-
 type State struct {
 	Name                     string
 	initiator                bool
