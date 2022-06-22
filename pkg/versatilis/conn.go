@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log"
 	"net"
+
+	"github.com/flynn/noise"
 )
 
 type ChannelType uint64
@@ -51,6 +53,13 @@ type Conn struct {
 
 	// a channel used to signal that data is available for sending
 	outChan chan bool
+
+	noiseConfig              *noise.Config
+	noiseHandshakeState      *noise.HandshakeState
+	handShakeCompleted       bool
+	handshakeSendRecvPattern []bool // "true"s indicate send events; "false" are receives
+	encryptState             *noise.CipherState
+	decryptState             *noise.CipherState
 }
 
 // creates a new TCP connection.  if initiator is true, then it Dials the
@@ -106,6 +115,15 @@ func (conn *Conn) Send(b []byte) (n int, err error) {
 func (conn *Conn) outBufProcessor() {
 	// wait for a signal that data is available
 	for range conn.inChan {
+
+		if !conn.handShakeCompleted {
+			// a special case!  we need to complete the handshake.  so we should
+			// kickoff a process for that, and utilize a timeout to handle
+			// failed handshakes
+
+			// TODO
+		}
+
 		plaintext, err := conn.outBuf.ReadAll()
 		if err != nil {
 			log.Fatalf("cannot read buffer: %v", err)
