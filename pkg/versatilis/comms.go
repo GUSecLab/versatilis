@@ -1,18 +1,6 @@
 package versatilis
 
-import (
-	"bytes"
-	"crypto/rand"
-	"encoding/binary"
-	"errors"
-	"io"
-	"net"
-
-	"google.golang.org/protobuf/proto"
-)
-
-type VersatilisDialer struct{}
-
+/*
 // internal helper function that actually sends a Package via the appropriate
 // transport protocol to the address specified by Address
 func sendPackageViaTransport(dst *Address, p *Package) error {
@@ -217,7 +205,7 @@ func (state *State) Read(b []byte) (n int, err error) {
 	}
 	return
 }
-
+*/
 /*
 func (state *State) Dial(t AddressType, address any) (net.Conn, error) {
 	if address == nil {

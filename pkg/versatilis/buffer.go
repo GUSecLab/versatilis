@@ -56,6 +56,19 @@ func (buf *vBuffer) Read(numBytes int) (b []byte, err error) {
 	return b, nil
 }
 
+// attempts to read the entirety of the buffer.  Returns the bytes read
+func (buf *vBuffer) ReadAll() (b []byte, err error) {
+	if !buf.init {
+		return nil, errors.New("buffer not initialized")
+	}
+	buf.mu.Lock()
+	defer buf.mu.Unlock()
+
+	b = buf.buf
+	buf.buf = nil
+	return b, nil
+}
+
 // writes to the buffer.  Returns the number of bytes written or err on error
 func (buf *vBuffer) Write(b []byte) (n int, err error) {
 	if !buf.init {

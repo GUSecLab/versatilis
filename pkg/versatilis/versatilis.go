@@ -3,7 +3,6 @@ package versatilis
 import (
 	"crypto/rand"
 	_ "embed"
-	sync "sync"
 
 	"github.com/Masterminds/semver"
 	"github.com/flynn/noise"
@@ -14,6 +13,12 @@ import (
 var versionString string
 
 var Version *semver.Version
+
+type VersatilisErrNotImplemented struct{}
+
+func (e *VersatilisErrNotImplemented) Error() string {
+	return "not yet implemented"
+}
 
 type State struct {
 	Name                     string
@@ -27,8 +32,8 @@ type State struct {
 	connected                bool
 	dst                      *Address
 	listenAddress            *Address
-	readBuffer               readBuffer
-	readMu                   *sync.Mutex
+	//readBuffer               readBuffer
+	//readMu *sync.Mutex
 }
 
 func init() {
@@ -47,8 +52,8 @@ func New(initiator bool, name string) *State {
 	state.initiator = initiator
 	state.handShakeCompleted = false
 	state.connected = false
-	state.readBuffer = make([]byte, 0)
-	state.readMu = &sync.Mutex{}
+	//state.readBuffer = make([]byte, 0)
+	//state.readMu = &sync.Mutex{}
 
 	state.noiseConfig = &noise.Config{
 		CipherSuite: noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashSHA256),
