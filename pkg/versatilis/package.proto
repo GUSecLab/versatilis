@@ -22,3 +22,8 @@ message Package {
     bytes noiseCiphertext = 23;
     bytes noiseAuthTag = 25;
 }
+
+// this should be a fixed size (when marshalled)
+message PackageHdr {
+    uint32 packageSize = 20;
+}

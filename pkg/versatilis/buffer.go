@@ -18,7 +18,7 @@ type vBuffer struct {
 	sizeLimit int // or 0 or -1 if no limit
 }
 
-func NewBuffer() *vBuffer {
+func NewVBuffer() *vBuffer {
 	buf := &vBuffer{
 		init:      true,
 		mu:        &sync.Mutex{},
