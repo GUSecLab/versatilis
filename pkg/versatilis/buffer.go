@@ -5,16 +5,24 @@ import (
 	sync "sync"
 )
 
+type VBufferOverflowError struct{}
+
+func (e *VBufferOverflowError) Error() string {
+	return "overflow occurred"
+}
+
 type vBuffer struct {
-	init bool `default:"false"`
-	buf  []byte
-	mu   *sync.Mutex
+	init      bool `default:"false"`
+	buf       []byte
+	mu        *sync.Mutex
+	sizeLimit int // or 0 or -1 if no limit
 }
 
 func NewBuffer() *vBuffer {
 	buf := &vBuffer{
-		init: true,
-		mu:   &sync.Mutex{},
+		init:      true,
+		mu:        &sync.Mutex{},
+		sizeLimit: -1,
 	}
 	return buf
 }
@@ -56,6 +64,21 @@ func (buf *vBuffer) Write(b []byte) (n int, err error) {
 	buf.mu.Lock()
 	defer buf.mu.Unlock()
 
-	buf.buf = append(buf.buf, b...)
-	return len(b), nil
+	if buf.sizeLimit > 0 {
+		currentBufSize := len(buf.buf)
+		bytesToWrite := buf.sizeLimit - currentBufSize
+		switch {
+		case bytesToWrite < 0:
+			panic("buffer overflow; programming error :(")
+		case bytesToWrite == 0:
+			return 0, &VBufferOverflowError{}
+		default:
+			bs := b[:bytesToWrite]
+			buf.buf = append(buf.buf, bs...)
+			return bytesToWrite, nil
+		}
+	} else {
+		buf.buf = append(buf.buf, b...)
+		return len(b), nil
+	}
 }
