@@ -4,6 +4,7 @@ package versatilis;
 
 option go_package = "../versatilis";
 
+/*
 message Message {
     oneof payload {
         string stringMessage = 10;
@@ -14,13 +15,15 @@ message Message {
 message MessageBuffer {
     repeated Message messages = 1;
 }
+*/
 
 message Package {
-    string version = 10;
-
-    bytes noiseHandshakeInfo = 20;
-    bytes noiseCiphertext = 23;
-    bytes noiseAuthTag = 25;
+    //string version = 10;
+    //bytes noiseHandshakeInfo = 20;
+    //bytes noiseCiphertext = 23;
+    //bytes noiseAuthTag = 25;
+    bytes ciphertext = 10;   
+    bytes authtag = 20;   
 }
 
 // this should be a fixed size (when marshalled)

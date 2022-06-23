@@ -52,8 +52,6 @@ func New(initiator bool, name string) *State {
 	state.initiator = initiator
 	state.handShakeCompleted = false
 	state.connected = false
-	//state.readBuffer = make([]byte, 0)
-	//state.readMu = &sync.Mutex{}
 
 	state.noiseConfig = &noise.Config{
 		CipherSuite: noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashSHA256),
