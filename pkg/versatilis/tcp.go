@@ -43,6 +43,9 @@ func NewTCPConn(initiator bool, existingConn *net.Conn, dst string) (*Conn, erro
 	go tcpTransportSend(c)
 	go tcpTransportRecv(c)
 
+	// let's do a handshake!
+	c.handleHandshake()
+
 	return c, nil
 }
 
@@ -97,6 +100,7 @@ func tcpTransportRecv(conn *Conn) {
 		}
 		if n > 0 {
 			bytesToWrite := buf[:n]
+			log.Infof("[%v] [recv] %v", conn, bytesToWrite)
 			bytesWritten, err := conn.transportInBuf.Write(bytesToWrite)
 			if err != nil {
 				log.Errorf("[%v] buffer write error: %v", conn, err)
@@ -106,6 +110,8 @@ func tcpTransportRecv(conn *Conn) {
 				log.Errorf("[%v] buffer write error", conn)
 				return
 			}
+
+			log.Infof("[%v] wrote %v bytes to transportInBuf", conn, bytesWritten)
 
 			// notify something that there's data available to be read
 			conn.inChanTransport <- true

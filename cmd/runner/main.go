@@ -91,7 +91,7 @@ func initiatorTCP(done chan bool) {
 		if err != nil {
 			panic(err)
 		}
-		log.Infof("Received %v", buf)
+		log.Infof("MAIN.GO: Received %v", string(buf))
 	}
 
 }
