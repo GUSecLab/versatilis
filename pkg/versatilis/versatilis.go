@@ -1,12 +1,9 @@
 package versatilis
 
 import (
-	"crypto/rand"
 	_ "embed"
 
 	"github.com/Masterminds/semver"
-	"github.com/flynn/noise"
-	log "github.com/sirupsen/logrus"
 )
 
 //go:embed version.md
@@ -20,6 +17,7 @@ func (e *VersatilisErrNotImplemented) Error() string {
 	return "not yet implemented"
 }
 
+/*
 type State struct {
 	Name                     string
 	initiator                bool
@@ -35,6 +33,7 @@ type State struct {
 	//readBuffer               readBuffer
 	//readMu *sync.Mutex
 }
+*/
 
 func init() {
 	var err error
@@ -44,6 +43,7 @@ func init() {
 	}
 }
 
+/*
 func New(initiator bool, name string) *State {
 	var err error
 
@@ -79,7 +79,9 @@ func New(initiator bool, name string) *State {
 func SetLogLevel(level log.Level) {
 	log.SetLevel(level)
 }
+*/
 
+/*
 func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
 	var out2 []byte
 	var err error
@@ -122,3 +124,4 @@ func (state *State) DoHandshake(dst *Address, listenAddress *Address) {
 		log.Debugf("[%v] enc_state=%v; dec_state=%v", state.Name, state.encryptState, state.decryptState)
 	}
 }
+*/

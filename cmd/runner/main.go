@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"time"
 	versatilis "versatilis/pkg/versatilis"
@@ -8,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+/*
 func initiator(dst *versatilis.Address, listenAddress *versatilis.Address) {
 	v := versatilis.New(true, "initiator")
 	log.Infof("I am %v", v.Name)
@@ -24,16 +26,10 @@ func initiator(dst *versatilis.Address, listenAddress *versatilis.Address) {
 	b = b[:n]
 	log.Infof("initiator received %v", string(b))
 
-	/*
-		mb, err := v.Receive(listenAddress, true)
-		if err != nil {
-			panic(err)
-		} else {
-			log.Info("initiator received: %v", mb)
-		}
-	*/
-}
 
+*/
+
+/*
 func initiatorChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
 	log.Debug("starting initiator")
 
@@ -50,27 +46,9 @@ func initiatorChan(done chan bool, toInitiator chan *versatilis.Package, toRespo
 
 	done <- true
 }
+*/
 
-func initiatorTCP(done chan bool) {
-	log.Debug("[tcp] starting TCP initiator")
-
-	conn, err := net.Dial("tcp", "localhost:9999")
-	if err != nil {
-		panic(err)
-	} else {
-		defer conn.Close()
-	}
-
-	addressConn := &versatilis.Address{
-		Type:     versatilis.AddressTypeTCP,
-		EndPoint: &conn,
-	}
-
-	initiator(addressConn, addressConn)
-
-	done <- true
-}
-
+/*
 func responder(dst *versatilis.Address, listenAddress *versatilis.Address, msg string) {
 	v := versatilis.New(false, "responder")
 	log.Infof("I am %v", v.Name)
@@ -78,7 +56,9 @@ func responder(dst *versatilis.Address, listenAddress *versatilis.Address, msg s
 
 	v.Write([]byte(msg))
 }
+*/
 
+/*
 func responderChan(done chan bool, toInitiator chan *versatilis.Package, toResponder chan *versatilis.Package) {
 	log.Debug("starting responder")
 
@@ -94,6 +74,26 @@ func responderChan(done chan bool, toInitiator chan *versatilis.Package, toRespo
 	responder(dst, listenAddress, "testing")
 
 	done <- true
+}
+*/
+
+func initiatorTCP(done chan bool) {
+	log.Debug("[tcp] starting TCP initiator")
+
+	vConn, err := versatilis.NewTCPConn(true, nil, "localhost:9999")
+	if err != nil {
+		panic(err)
+	}
+	log.Info("launched Versatilis TCP connection")
+
+	for {
+		buf, err := vConn.Read(1024)
+		if err != nil {
+			panic(err)
+		}
+		log.Infof("Received %v", buf)
+	}
+
 }
 
 func responderTCP(done chan bool) {
@@ -113,12 +113,17 @@ func responderTCP(done chan bool) {
 	}
 	log.Debugf("[tcp] connection established from %v", conn)
 
-	addressConn := &versatilis.Address{
-		Type:     versatilis.AddressTypeTCP,
-		EndPoint: &conn,
+	vConn, err := versatilis.NewTCPConn(false, &conn, "")
+	if err != nil {
+		panic(err)
 	}
+	log.Info("launched Versatilis TCP connection")
 
-	responder(addressConn, addressConn, "hello world")
+	for i := 0; i < 5; i++ {
+		s := fmt.Sprintf("Hello world; counter is %v", i)
+		vConn.Send([]byte(s))
+		time.Sleep(time.Second * 2)
+	}
 
 	done <- true
 }
@@ -126,23 +131,23 @@ func responderTCP(done chan bool) {
 func main() {
 
 	log.SetLevel(log.InfoLevel)
-	versatilis.SetLogLevel(log.InfoLevel)
+	//versatilis.SetLogLevel(log.InfoLevel)
 
 	done := make(chan bool)
 
 	log.Info("starting up")
-	log.Info("doing some channel tests")
-	toInitiator := make(chan *versatilis.Package)
-	toResponder := make(chan *versatilis.Package)
 
-	go initiatorChan(done, toInitiator, toResponder)
-	go responderChan(done, toInitiator, toResponder)
+	/*
+		log.Info("doing some channel tests")
+		toInitiator := make(chan *versatilis.Package)
+		toResponder := make(chan *versatilis.Package)
 
-	<-done
-	<-done
+		go initiatorChan(done, toInitiator, toResponder)
+		go responderChan(done, toInitiator, toResponder)
 
-	log.Info("waiting 1 second for next test")
-	time.Sleep(time.Second * 1)
+		<-done
+		<-done
+	*/
 
 	go responderTCP(done)
 	time.Sleep(time.Second * 1)

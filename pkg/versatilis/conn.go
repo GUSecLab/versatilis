@@ -3,13 +3,17 @@ package versatilis
 import (
 	"crypto/rand"
 	"errors"
-	"log"
+	"fmt"
 	"math"
-	"net"
+
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/flynn/noise"
-	"google.golang.org/protobuf/proto"
 )
+
+var constPackageHdrSize int
+var constHandshakeHdrSize int
 
 type ChannelType uint64
 
@@ -38,32 +42,35 @@ type Conn struct {
 	addressType AddressType
 
 	// the raw bytes off the wire (encrypted and marshalled)
-	transportLayerInBuf *vBuffer
+	transportInBuf *vBuffer
 
 	// (authenticated) plaintext data ready to be read by an app
 	inBuf *vBuffer
 
-	// a channel used to signal that data is available for sending
+	// a channel used to signal that data is available for reading
 	inChan chan bool
 
+	// a channel used to signal that data is available for reading via the transport
+	inChanTransport chan bool
+
 	// encrypted and marshalled data ready to be sent off the wire
-	transportLayerOutBuf *vBuffer
+	transportOutBuf *vBuffer
 
 	// plaintext data ready to be encrypted and marshalled and moved over to
 	// transportLayerOutBuf
 	outBuf *vBuffer
 
-	// a channel used to signal that data is available for sending
+	// a channel used to signal that data is available in the outBuf for processing
 	outChan chan bool
+
+	// a channel used to signal that data is available for sending via the transport
+	outChanTransport chan bool
 
 	noiseConfig         *noise.Config
 	noiseHandshakeState *noise.HandshakeState
 
 	// if true, the handshake is completed
 	handshakeCompleted bool
-
-	// a channel that's used for conveying that the handshake process is done
-	handshakeCompletedChan chan bool
 
 	// "true"s indicate send events; "false" are receives
 	handshakeSendRecvPattern []bool
@@ -78,22 +85,39 @@ type Conn struct {
 	badStateErr error
 }
 
+func (conn *Conn) String() string {
+	switch conn.directionality {
+	case ChannelTypeBidirectional, ChannelTypeInbound:
+		return fmt.Sprintf("[conn (type %v) (initiator: %v)]",
+			conn.listenAddress, conn.noiseConfig.Initiator)
+	case ChannelTypeOutbound:
+		return fmt.Sprintf("[conn (type %v) (initiator: %v)]",
+			conn.dstAddress, conn.noiseConfig.Initiator)
+	default:
+		return "[conn (invalid/unititialized)]"
+	}
+}
+
 // a helper function which sets some initial/default values for a new Conn, and
 // does some init stuff for Noise
 func newConn(initiator bool) (conn *Conn, err error) {
 
 	conn = &Conn{
-		transportLayerInBuf:    NewVBuffer(),
-		inBuf:                  NewVBuffer(),
-		inChan:                 make(chan bool),
-		transportLayerOutBuf:   NewVBuffer(),
-		outBuf:                 NewVBuffer(),
-		outChan:                make(chan bool),
-		handshakeCompleted:     false,
-		handshakeCompletedChan: make(chan bool),
-		badState:               false,
-		badStateErr:            nil,
+		transportInBuf:     NewVBuffer(),
+		inBuf:              NewVBuffer(),
+		inChan:             make(chan bool),
+		inChanTransport:    make(chan bool),
+		transportOutBuf:    NewVBuffer(),
+		outBuf:             NewVBuffer(),
+		outChan:            make(chan bool),
+		outChanTransport:   make(chan bool),
+		handshakeCompleted: false,
+		badState:           false,
+		badStateErr:        nil,
 	}
+
+	constPackageHdrSize = proto.Size(&PackageHdr{})
+	constHandshakeHdrSize = proto.Size(&HandshakeMsgHdr{})
 
 	conn.noiseConfig = &noise.Config{
 		CipherSuite: noise.NewCipherSuite(noise.DH25519, noise.CipherAESGCM, noise.HashSHA256),
@@ -117,40 +141,10 @@ func newConn(initiator bool) (conn *Conn, err error) {
 	return conn, nil
 }
 
-// creates a new TCP connection.  if initiator is true, then it Dials the
-// address specified by dst.  if initiator is false, it takes in a net.Conn object associated
-// with an already existing TCP connection.
-// TODO: move this function to another file (maybe tcp.go?)
-func NewTCPConn(initiator bool, existingConn *net.Conn, dst string) (*Conn, error) {
-	addr := Address{
-		Type: AddressTypeTCP,
-	}
-	switch initiator {
-	case true:
-		conn, err := net.Dial("tcp", dst)
-		if err != nil {
-			return nil, err
-		}
-		addr.EndPoint = &conn
-
-	case false:
-		addr.EndPoint = existingConn
-	}
-
-	// create a new connection
-	c, err := newConn(initiator)
-	if err != nil {
-		return nil, err
-	}
-
-	// set some TCP-specific fields
-	c.directionality = ChannelTypeBidirectional
-	c.addressType = AddressTypeTCP
-	c.listenAddress = &addr
-	c.dstAddress = &addr
-
-	go c.outBufProcessor()
-	return c, nil
+// returns true iff there is data available for reading.  This data could
+// correspond to a handshake message or a payload.
+func (conn *Conn) IsDataAvailable() bool {
+	return (conn.inBuf.Size() > 0)
 }
 
 // sends some data via an already-established connection.  or, more precisely,
@@ -161,43 +155,99 @@ func (conn *Conn) Send(b []byte) (n int, err error) {
 		return -1, conn.badStateErr
 	}
 
-	if conn == nil || conn.directionality == ChannelTypeUndefined {
+	if conn == nil || conn.directionality == ChannelTypeUndefined || conn.directionality == ChannelTypeInbound {
 		return -1, errors.New("invalid channel")
 	}
 	n, err = conn.outBuf.Write(b)
 	if err != nil {
-		conn.outChan <- true
+		return -1, err
 	}
+	conn.outChan <- true // signal that more data is available
 	return
+}
+
+// Reads some plaintext data via an already-established connection.
+func (conn *Conn) Read(maxBytes int) ([]byte, error) {
+	if conn.badState {
+		return nil, conn.badStateErr
+	}
+
+	if conn == nil || conn.directionality == ChannelTypeUndefined || conn.directionality == ChannelTypeOutbound {
+		return nil, errors.New("invalid channel")
+	}
+	b, err := conn.inBuf.Read(maxBytes)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// a helper function which writes either a package (if p is not null) or a
+// handshake message (if h is not nil) to the transportOutBuf
+func (conn *Conn) writePackageToTransportOutBuf(p *Package, h *HandshakeMsg) (err error) {
+	if p != nil && h != nil {
+		panic("invalid usage")
+	}
+
+	var marshalledData []byte
+	var marshalledDataLen []byte
+
+	switch {
+	case p != nil:
+		marshalledData, err = proto.Marshal(p)
+		if (err != nil) || len(marshalledData) >= math.MaxUint32 {
+			return errors.New("data handling error")
+		}
+		hdr := PackageHdr{
+			PackageSize: uint32(len(marshalledData)),
+		}
+		marshalledDataLen, err = proto.Marshal(&hdr)
+		if (err != nil) || int(hdr.PackageSize) != constPackageHdrSize {
+			return errors.New("data handling error")
+		}
+
+	case h != nil:
+		marshalledData, err = proto.Marshal(h)
+		if (err != nil) || len(marshalledData) >= math.MaxUint32 {
+			return errors.New("data handling error")
+		}
+		hdr := PackageHdr{
+			PackageSize: uint32(len(marshalledData)),
+		}
+		marshalledDataLen, err = proto.Marshal(&hdr)
+		if (err != nil) || int(hdr.PackageSize) != constHandshakeHdrSize {
+			return errors.New("data handling error")
+		}
+	}
+
+	if n, err := conn.transportOutBuf.Write(marshalledDataLen); err != nil || n != len(marshalledDataLen) {
+		return errors.New("data handling error")
+	}
+	if n, err := conn.transportOutBuf.Write(marshalledData); err != nil || n != len(marshalledData) {
+		return errors.New("data handling error")
+	}
+
+	return nil
 }
 
 // this helper function waits for a signal that data is available, and then
 // packagizes the data and pushes the packages to the transportLayerOutBuf
 func (conn *Conn) outBufProcessor() {
 	// wait for a signal that data is available
-	for range conn.inChan {
+	for range conn.outChan {
 
 		if !conn.handshakeCompleted {
 			// a special case!  we need to complete the handshake.  so we should
 			// kickoff a process for that, and utilize a timeout to handle
 			// failed handshakes
-
-			// TODO
-			// go conn.handleHandshake()
-
-			// TODO: remember to send something on this channel :)
-			// wait until the handshake completes
-			<-conn.handshakeCompletedChan
-
-			// free some mem?
-			close(conn.handshakeCompletedChan)
+			conn.handleHandshake()
 		}
 
 		plaintext, err := conn.outBuf.ReadAll()
 		if err != nil {
 			log.Fatalf("cannot read buffer: %v", err)
 		}
-		if plaintext == nil || len(plaintext) == 0 {
+		if len(plaintext) == 0 {
 			continue
 		}
 
@@ -205,7 +255,6 @@ func (conn *Conn) outBufProcessor() {
 		// Noise's AEAD scheme
 
 		var p Package
-		var hdr PackageHdr
 		p.Authtag = make([]byte, 16)
 		rand.Read(p.Authtag)
 		p.Ciphertext, err = conn.encryptState.Encrypt(nil, p.Authtag, plaintext)
@@ -214,29 +263,181 @@ func (conn *Conn) outBufProcessor() {
 			conn.badStateErr = err
 			return // don't process any more messages!
 		}
-		marshalledPackage, err := proto.Marshal(&p)
-		if (err != nil) || len(marshalledPackage) >= math.MaxUint32 {
+
+		// write the package to the transport out buf
+		if err := conn.writePackageToTransportOutBuf(&p, nil); err != nil {
 			conn.badState = true
 			conn.badStateErr = err
-			return // don't process any more messages!
-		}
-		hdr.PackageSize = uint32(len(marshalledPackage))
-		marshalledPackageHdr, err := proto.Marshal(&hdr)
-		if (err != nil) || len(marshalledPackageHdr) != CONSTANTTODO {
-			conn.badState = true
-			conn.badStateErr = err
-			return // don't process any more messages!
+			return
 		}
 
-		if n, err := conn.transportLayerOutBuf.Write(marshalledPackageHdr); err != nil || n != len(marshalledPackageHdr) {
-			conn.badState = true
-			conn.badStateErr = err
-			return // don't process any more messages!
+		// lastly, inform some send function (e.g., tcpTransportSend) that it
+		// should look at the transportOutBuf
+		conn.outChanTransport <- true
+
+	}
+}
+
+// this helper function "wakes up" when data is available in the transportInBuf,
+// and then de-packages and decrypts the data and puts it in the inBuf
+func (conn *Conn) inBufProcessor() {
+	// wait for a signal that data is available
+	for range conn.inChanTransport {
+
+		if !conn.handshakeCompleted {
+			// a special case!  we need to complete the handshake.  so we should
+			// kickoff a process for that, and utilize a timeout to handle
+			// failed handshakes
+			conn.handleHandshake()
 		}
-		if n, err := conn.transportLayerOutBuf.Write(marshalledPackage); err != nil || n != len(marshalledPackage) {
-			conn.badState = true
-			conn.badStateErr = err
-			return // don't process any more messages!
+
+		// first, we read the package header from transportInBuf
+		if conn.transportInBuf.Size() < int(constPackageHdrSize) {
+			// there's not enough data to read a full PackageHdr
+			continue
 		}
+		phRaw, err := conn.transportInBuf.Read(int(constPackageHdrSize))
+		if err != nil {
+			log.Errorf("buffer read error: %v", err)
+			continue
+		}
+		var ph PackageHdr
+		if err := proto.Unmarshal(phRaw, &ph); err != nil {
+			log.Errorf("unmarshalling error: %v", err)
+			continue
+		}
+
+		// let's wait until we have enough bytes to read
+		for conn.transportInBuf.Size() < int(ph.PackageSize) {
+			<-conn.inChanTransport
+		}
+
+		// woo-hoo!  we have enough bytes to read out package
+		pRaw, err := conn.transportInBuf.Read(int(ph.PackageSize))
+		if err != nil {
+			log.Errorf("buffer read error: %v", err)
+			continue
+		}
+		var p Package
+		if err := proto.Unmarshal(pRaw, &p); err != nil {
+			log.Errorf("unmarshalling error: %v", err)
+			continue
+		}
+
+		// now, let's decrypt the package
+		plaintext, err := conn.decryptState.Decrypt(nil, p.Authtag, p.Ciphertext)
+		if err != nil {
+			log.Errorf("decryption error: %v", err)
+			continue
+		}
+		log.Debugf("decrypted: %v", plaintext)
+
+		// finally, let's write the plaintext to the inbuf and signal that data
+		// is available
+		if _, err := conn.inBuf.Write(plaintext); err != nil {
+			log.Errorf("cannot write to inbuf: %v", err)
+			continue
+		}
+		conn.inChan <- true
+
+	}
+}
+
+// this helper function blocks until it can return a handshake message from the
+// transport
+func (conn *Conn) getHandshakeMsgFromTransport() (h *HandshakeMsg, err error) {
+
+	// first, we wait for enough data at the inbound transport buffer to grab a
+	// HandshakeMsgHdr
+	for conn.transportInBuf.Size() < int(constHandshakeHdrSize) {
+		<-conn.inChanTransport
+	}
+
+	// grab the handshakemsghdr
+	hhRaw, err := conn.transportInBuf.Read(int(constHandshakeHdrSize))
+	if err != nil {
+		log.Errorf("buffer read error: %v", err)
+		return nil, err
+	}
+	var hh HandshakeMsgHdr
+	if err := proto.Unmarshal(hhRaw, &hh); err != nil {
+		log.Errorf("unmarshalling error: %v", err)
+		return nil, err
+	}
+
+	// let's wait until we have enough bytes to read the full handshakeMsg
+	for conn.transportInBuf.Size() < int(hh.Size) {
+		<-conn.inChanTransport
+	}
+
+	// woo-hoo!  we have enough bytes to read in our handshake message
+	hRaw, err := conn.transportInBuf.Read(int(hh.Size))
+	if err != nil {
+		log.Errorf("buffer read error: %v", err)
+		return nil, err
+	}
+	if err := proto.Unmarshal(hRaw, h); err != nil {
+		log.Errorf("unmarshalling error: %v", err)
+		return nil, err
+	}
+	return h, nil
+}
+
+func (conn *Conn) handleHandshake() {
+	var handshakeMsgRaw []byte
+	var err error
+
+	out := make([]byte, 0, 4096)
+
+	for _, action := range conn.handshakeSendRecvPattern {
+		if action { // send event
+			handshakeMsgRaw, conn.encryptState, conn.decryptState, err =
+				conn.noiseHandshakeState.WriteMessage(out, nil)
+			if err != nil {
+				log.Errorf("handshake error: %v", err)
+				conn.badState = true
+				conn.badStateErr = err
+				return
+			}
+
+			h := HandshakeMsg{
+				Message: handshakeMsgRaw,
+			}
+			// write the package to the transport out buf
+			if err := conn.writePackageToTransportOutBuf(nil, &h); err != nil {
+				conn.badState = true
+				conn.badStateErr = err
+				return
+			}
+			// lastly, inform some send function (e.g., tcpTransportSend) that it
+			// should look at the transportOutBuf
+			conn.outChanTransport <- true
+
+		} else { // receive event
+
+			handshakeMsg, err := conn.getHandshakeMsgFromTransport()
+			if err != nil {
+				conn.badState = true
+				conn.badStateErr = err
+				return
+			}
+
+			_, conn.decryptState, conn.encryptState, err =
+				conn.noiseHandshakeState.ReadMessage(out, handshakeMsg.Message)
+			if err != nil {
+				log.Errorf("handshake error: %v", err)
+				conn.badState = true
+				conn.badStateErr = err
+				return
+			}
+		}
+	}
+
+	if err != nil {
+		panic(err)
+	}
+	if conn.encryptState != nil {
+		conn.handshakeCompleted = true
+		log.Infof("[%v] handshake complete", conn)
 	}
 }
