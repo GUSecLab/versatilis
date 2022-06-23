@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/flynn/noise"
@@ -25,6 +24,10 @@ const (
 )
 
 type Conn struct {
+
+	// pointer to its parent Versatilis instance
+	v *Versatilis
+
 	// directionality of the channel
 	directionality ChannelType
 
@@ -103,9 +106,10 @@ func (conn *Conn) String() string {
 
 // a helper function which sets some initial/default values for a new Conn, and
 // does some init stuff for Noise
-func newConn(initiator bool) (conn *Conn, err error) {
+func newConn(v *Versatilis, initiator bool) (conn *Conn, err error) {
 
 	conn = &Conn{
+		v:                      v,
 		transportInBuf:         NewVBuffer(),
 		inBuf:                  NewVBuffer(),
 		inChan:                 make(chan bool),
@@ -253,7 +257,7 @@ func (conn *Conn) outBufProcessor() {
 
 		plaintext, err := conn.outBuf.ReadAll()
 		if err != nil {
-			log.Fatalf("cannot read buffer: %v", err)
+			conn.v.Log.Fatalf("cannot read buffer: %v", err)
 		}
 		if len(plaintext) == 0 {
 			continue
@@ -304,45 +308,45 @@ func (conn *Conn) inBufProcessor() {
 		}
 		phRaw, err := conn.transportInBuf.Read(int(constPackageHdrSize))
 		if err != nil {
-			log.Errorf("buffer read error: %v", err)
+			conn.v.Log.Errorf("buffer read error: %v", err)
 			continue
 		}
 		var ph PackageHdr
 		if err := proto.Unmarshal(phRaw, &ph); err != nil {
-			log.Errorf("unmarshalling error: %v", err)
+			conn.v.Log.Errorf("unmarshalling error: %v", err)
 			continue
 		}
 
 		// let's wait until we have enough bytes to read
 		for conn.transportInBuf.Size() < int(ph.PackageSize) {
-			log.Infof("[%v] inBufProcessor waiting for signal on conn.inChanTransport", conn)
+			conn.v.Log.Infof("[%v] inBufProcessor waiting for signal on conn.inChanTransport", conn)
 			<-conn.inChanTransport
 		}
 
 		// woo-hoo!  we have enough bytes to read out package
 		pRaw, err := conn.transportInBuf.Read(int(ph.PackageSize))
 		if err != nil {
-			log.Errorf("buffer read error: %v", err)
+			conn.v.Log.Errorf("buffer read error: %v", err)
 			continue
 		}
 		var p Package
 		if err := proto.Unmarshal(pRaw, &p); err != nil {
-			log.Errorf("unmarshalling error: %v", err)
+			conn.v.Log.Errorf("unmarshalling error: %v", err)
 			continue
 		}
 
 		// now, let's decrypt the package
 		plaintext, err := conn.decryptState.Decrypt(nil, p.Authtag, p.Ciphertext)
 		if err != nil {
-			log.Errorf("decryption error: %v", err)
+			conn.v.Log.Errorf("decryption error: %v", err)
 			continue
 		}
-		log.Debugf("decrypted: %v", plaintext)
+		conn.v.Log.Debugf("decrypted: %v", plaintext)
 
 		// finally, let's write the plaintext to the inbuf and signal that data
 		// is available
 		if _, err := conn.inBuf.Write(plaintext); err != nil {
-			log.Errorf("cannot write to inbuf: %v", err)
+			conn.v.Log.Errorf("cannot write to inbuf: %v", err)
 			continue
 		}
 		conn.inChan <- true
@@ -357,48 +361,45 @@ func (conn *Conn) getHandshakeMsgFromTransport() (*HandshakeMsg, error) {
 	var hh HandshakeMsgHdr
 	var h HandshakeMsg
 
-	log.Infof("[%v] getHandshakeMsgFromTransport: getting handshake message from transport", conn)
+	conn.v.Log.Debugf("[%v] getHandshakeMsgFromTransport: getting handshake message from transport", conn)
 
 	// first, we wait for enough data at the inbound transport buffer to grab a
 	// HandshakeMsgHdr
 	for conn.transportInBuf.Size() < int(constHandshakeHdrSize) {
-		log.Infof("[%v] not enuf bytes for handshake message; have %v, want %v",
+		conn.v.Log.Debugf("[%v] not enuf bytes for handshake message; have %v, want %v",
 			conn, conn.transportInBuf.Size(), constHandshakeHdrSize)
-		log.Infof("[%v] waiting on channel conn.inChanTranspor", conn)
 		<-conn.inChanTransport
-		log.Infof("[%v] received true on channel conn.inChanTranspor", conn)
-
 	}
 
 	// grab the handshakemsghdr
 	hhRaw, err := conn.transportInBuf.Read(int(constHandshakeHdrSize))
 	if err != nil {
-		log.Errorf("buffer read error: %v", err)
+		conn.v.Log.Errorf("buffer read error: %v", err)
 		return nil, err
 	}
 	if err := proto.Unmarshal(hhRaw, &hh); err != nil {
-		log.Errorf("unmarshalling error: %v", err)
+		conn.v.Log.Errorf("unmarshalling error: %v", err)
 		return nil, err
 	}
 
 	// let's wait until we have enough bytes to read the full handshakeMsg
 	for conn.transportInBuf.Size() < int(hh.Size) {
-		log.Infof("[%v] getHandshakeMsgFromTransport waiting for signal on conn.inChanTransport", conn)
+		conn.v.Log.Debugf("[%v] getHandshakeMsgFromTransport waiting for signal on conn.inChanTransport", conn)
 		<-conn.inChanTransport
 	}
 
 	// woo-hoo!  we have enough bytes to read in our handshake message
 	hRaw, err := conn.transportInBuf.Read(int(hh.Size))
 	if err != nil {
-		log.Errorf("buffer read error: %v", err)
+		conn.v.Log.Errorf("buffer read error: %v", err)
 		return nil, err
 	}
 	if err := proto.Unmarshal(hRaw, &h); err != nil {
-		log.Errorf("unmarshalling error: %v", err)
+		conn.v.Log.Errorf("unmarshalling error: %v", err)
 		return nil, err
 	}
 
-	log.Infof("[%v] getHandshakeMsgFromTransport: got handshake message from transport!", conn)
+	conn.v.Log.Debugf("[%v] getHandshakeMsgFromTransport: got handshake message from transport!", conn)
 
 	return &h, nil
 }
@@ -412,12 +413,12 @@ func (conn *Conn) handleHandshake() {
 	for _, action := range conn.handshakeSendRecvPattern {
 		if action { // send event
 
-			log.Infof("[%v] prepping to send handshake message", conn)
+			conn.v.Log.Debugf("[%v] prepping to send handshake message", conn)
 
 			handshakeMsgRaw, conn.encryptState, conn.decryptState, err =
 				conn.noiseHandshakeState.WriteMessage(out, nil)
 			if err != nil {
-				log.Errorf("handshake error [send]: %v", err)
+				conn.v.Log.Errorf("handshake error [send]: %v", err)
 				conn.badState = true
 				conn.badStateErr = err
 				return
@@ -436,10 +437,10 @@ func (conn *Conn) handleHandshake() {
 			// should look at the transportOutBuf
 			conn.outChanTransport <- true
 
-			log.Infof("[%v] sent handshake message", conn)
+			conn.v.Log.Debugf("[%v] sent handshake message", conn)
 		} else { // receive event
 
-			log.Infof("[%v] prepping to receive handshake message", conn)
+			conn.v.Log.Debugf("[%v] prepping to receive handshake message", conn)
 
 			handshakeMsg, err := conn.getHandshakeMsgFromTransport()
 			if err != nil {
@@ -451,13 +452,13 @@ func (conn *Conn) handleHandshake() {
 			_, conn.decryptState, conn.encryptState, err =
 				conn.noiseHandshakeState.ReadMessage(out, handshakeMsg.Message)
 			if err != nil {
-				log.Errorf("handshake error [recv]: %v", err)
+				conn.v.Log.Errorf("handshake error [recv]: %v", err)
 				conn.badState = true
 				conn.badStateErr = err
 				return
 			}
 
-			log.Infof("[%v] received handshake message", conn)
+			conn.v.Log.Debugf("[%v] received handshake message", conn)
 		}
 	}
 
@@ -472,6 +473,6 @@ func (conn *Conn) handleHandshake() {
 		if conn.directionality == ChannelTypeBidirectional {
 			conn.handshakeCompletedChan <- true
 		}
-		log.Infof("[%v] handshake complete", conn)
+		conn.v.Log.Infof("[%v] handshake complete", conn)
 	}
 }

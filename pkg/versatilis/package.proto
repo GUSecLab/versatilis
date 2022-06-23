@@ -4,24 +4,8 @@ package versatilis;
 
 option go_package = "../versatilis";
 
-/*
-message Message {
-    oneof payload {
-        string stringMessage = 10;
-        bytes bytesMessage = 20;
-    }
-}
-
-message MessageBuffer {
-    repeated Message messages = 1;
-}
-*/
 
 message Package {
-    //string version = 10;
-    //bytes noiseHandshakeInfo = 20;
-    //bytes noiseCiphertext = 23;
-    //bytes noiseAuthTag = 25;
     bytes ciphertext = 10;   
     bytes authtag = 20;   
 }

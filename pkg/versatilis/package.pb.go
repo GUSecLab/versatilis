@@ -25,10 +25,6 @@ type Package struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	//string version = 10;
-	//bytes noiseHandshakeInfo = 20;
-	//bytes noiseCiphertext = 23;
-	//bytes noiseAuthTag = 25;
 	Ciphertext []byte `protobuf:"bytes,10,opt,name=ciphertext,proto3" json:"ciphertext,omitempty"`
 	Authtag    []byte `protobuf:"bytes,20,opt,name=authtag,proto3" json:"authtag,omitempty"`
 }
